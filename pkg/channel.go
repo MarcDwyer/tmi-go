@@ -1,17 +1,29 @@
 package tc
 
 import (
-	"github.com/gorilla/websocket"
+	"fmt"
 )
 
 type Channel struct {
 	channel string
-	ws      *websocket.Conn
+	send    chan string
+	part    chan *Channel
 }
 
-func NewChannel(channel string, ws *websocket.Conn) *Channel {
+func NewChannel(channel string, send chan string, part chan *Channel) *Channel {
 	return &Channel{
 		channel,
-		ws,
+		send,
+		part,
 	}
+}
+
+func (c Channel) SendMsg(msg string) {
+	cmd := fmt.Sprintf("PRIVMSG %s :%s", c.channel, msg)
+	c.send <- cmd
+}
+
+// Part the channel
+func (c *Channel) Part() {
+	c.part <- c
 }
