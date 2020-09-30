@@ -12,20 +12,22 @@ import (
 type TwitchChat struct {
 	credentials *TwitchCreds
 	send        chan string
-	part        chan *Channel
-	channels    map[*Channel]bool
+	part        chan string
+	channels    map[string]*Channel
 }
 type TwitchCreds struct {
 	Username string
 	OAuth    string
 }
 
+// Trailing is the message, USER is the user origin
+//
 func NewTwitchChat(credentials *TwitchCreds) *TwitchChat {
 	return &TwitchChat{
 		credentials: credentials,
 		send:        make(chan string),
-		part:        make(chan *Channel),
-		channels:    make(map[*Channel]bool),
+		part:        make(chan string),
+		channels:    make(map[string]*Channel),
 	}
 }
 
@@ -34,7 +36,9 @@ type isAuth struct {
 	rawMsg string
 }
 
-func (tc TwitchChat) ConnectAndRun() string {
+//Connect connects to Twitch's IRC server
+// will panic if it fails
+func (tc TwitchChat) Connect() string {
 	tcURL := "ws://irc-ws.chat.twitch.tv:80"
 	c, _, err := websocket.DefaultDialer.Dial(tcURL, nil)
 	if err != nil {
@@ -54,7 +58,7 @@ func (tc TwitchChat) ConnectAndRun() string {
 			}
 			raw := string(msg[:])
 			ircMsg := irc.ParseMessage(raw)
-			fmt.Println(ircMsg)
+			// fmt.Println(ircMsg.Params)
 			switch ircMsg.Command {
 			case "001":
 				fmt.Println("succ")
@@ -73,11 +77,17 @@ func (tc TwitchChat) ConnectAndRun() string {
 						succ:   false,
 					}
 				}
-			case "PRIVMSG":
-				fmt.Println(ircMsg.Trailing)
 				break
 			default:
-				fmt.Println(ircMsg.Params)
+				{
+					name := ircMsg.Params[0]
+					if channel, ok := tc.channels[name]; ok {
+						err := channel.HandleMsg(ircMsg.Command, ircMsg)
+						if err != nil {
+							fmt.Println(err)
+						}
+					}
+				}
 			}
 		}
 	}()
@@ -98,28 +108,24 @@ func (tc TwitchChat) run(ws *websocket.Conn) {
 			if err != nil {
 				fmt.Printf("Error sending: %s", msg)
 			}
-		case channel := <-tc.part:
-			fmt.Println(channel)
-			if _, ok := tc.channels[channel]; ok {
-				fmt.Println("ok")
-				tc.send <- fmt.Sprintf("PART %s", channel.channel)
-				delete(tc.channels, channel)
+		case chanName := <-tc.part:
+			if _, ok := tc.channels[chanName]; ok {
+				tc.send <- fmt.Sprintf("PART %s", chanName)
+				delete(tc.channels, chanName)
 			}
 		}
 	}
 }
 
+//JoinChannel joins a twitch channel example: "ninja" or "xqcow"
 func (tc TwitchChat) JoinChannel(channel string) *Channel {
+	channel = strings.ToLower(channel)
 	fc := string(channel[0])
 	if fc != "#" {
 		channel = fmt.Sprintf("#%s", channel)
 	}
 	tc.send <- fmt.Sprintf("JOIN %s", channel)
-	newchan := &Channel{
-		channel: channel,
-		send:    tc.send,
-		part:    tc.part,
-	}
-	tc.channels[newchan] = true
+	newchan := NewChannel(channel, tc.send, tc.part)
+	tc.channels[channel] = newchan
 	return newchan
 }

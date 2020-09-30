@@ -1,9 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"time"
 	tc "tmi-go/pkg"
+
+	"github.com/sorcix/irc"
 )
 
 func main() {
@@ -22,12 +25,14 @@ func main() {
 		Username: "roy_stang",
 		OAuth:    oauth,
 	})
-	tc.ConnectAndRun()
+	tc.Connect()
 	name := "alisha12287"
 	channel := tc.JoinChannel(name)
 
-	time.Sleep(15 * time.Second)
-	channel.Part()
-	time.Sleep(15 * time.Second)
+	channel.AddListener("PRIVMSG", func(ircMsg *irc.Message) {
+		msg := fmt.Sprintf("%s: %s", ircMsg.User, ircMsg.Trailing)
+		fmt.Println(msg)
+	})
+	time.Sleep(60 * time.Second)
 
 }
