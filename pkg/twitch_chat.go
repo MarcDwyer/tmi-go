@@ -10,24 +10,22 @@ import (
 )
 
 type TwitchChat struct {
-	credentials *TwitchCreds
-	send        chan string
-	part        chan string
-	channels    map[string]*Channel
-}
-type TwitchCreds struct {
 	Username string
 	OAuth    string
+	send     chan string
+	part     chan string
+	channels map[string]*Channel
 }
 
 // Trailing is the message, USER is the user origin
 //
-func NewTwitchChat(credentials *TwitchCreds) *TwitchChat {
+func NewTwitchChat(username string, oauth string) *TwitchChat {
 	return &TwitchChat{
-		credentials: credentials,
-		send:        make(chan string),
-		part:        make(chan string),
-		channels:    make(map[string]*Channel),
+		Username: username,
+		OAuth:    oauth,
+		send:     make(chan string),
+		part:     make(chan string),
+		channels: make(map[string]*Channel),
 	}
 }
 
@@ -44,13 +42,11 @@ func (tc TwitchChat) Connect() string {
 	if err != nil {
 		panic(err)
 	}
-
 	auth := make(chan isAuth)
 	go tc.run(c)
 	go func() {
-		creds := tc.credentials
-		tc.send <- fmt.Sprintf("PASS oauth:%s", creds.OAuth)
-		tc.send <- fmt.Sprintf("NICK %s", creds.Username)
+		tc.send <- fmt.Sprintf("PASS oauth:%s", tc.OAuth)
+		tc.send <- fmt.Sprintf("NICK %s", tc.Username)
 		for {
 			_, msg, err := c.ReadMessage()
 			if err != nil {
